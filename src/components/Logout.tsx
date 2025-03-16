@@ -11,6 +11,8 @@ const Logout = () => {
     setLoading(true);
     await signOut();
     setLoading(false);
+
+    window.location.href = "/";
   };
 
   return (

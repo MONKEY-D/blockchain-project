@@ -47,7 +47,9 @@ export const NavAvatar = () => {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
+    setUser(null);
+    window.location.reload();
   };
 
   return (
@@ -71,12 +73,12 @@ export const NavAvatar = () => {
           <p className="font-semibold text-gray-200">{user?.name}</p>
           <p className="text-sm text-gray-400">{user?.email}</p>
         </div>
-        <DropdownMenuSeparator className="bg-gray-700"/>
+        <DropdownMenuSeparator className="bg-gray-700" />
         <DropdownMenuItem
           onClick={handleSignOut}
           className="cursor-pointer text-red-400 hover:bg-red-900"
         >
-           LogOut
+          LogOut
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
