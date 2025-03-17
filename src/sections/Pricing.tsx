@@ -1,20 +1,28 @@
 "use client";
+
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Inter } from "next/font/google";
+import { createClient } from "../../utils/supabase/client";
 import { useEffect, useState } from "react";
 
+const supabase = createClient();
 const inter = Inter({ subsets: ["latin"], weight: ["400", "600", "700"] });
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export const pricingTiers = [
   {
     title: "Plus",
     description: "Essential protection with AI-powered scanning.",
-    price: 199, // ₹1.99 → 199 paisa
+    price: 1.99,
     displayPrice: "₹1.99 / year",
-    buttonText: "Buy Now",
     features: [
       "Real-time virus & malware scanning",
       "AI threat detection & removal",
@@ -26,9 +34,8 @@ export const pricingTiers = [
   {
     title: "Standard",
     description: "Advanced security with privacy protection.",
-    price: 299, // ₹2.99 → 299 paisa
+    price: 2.99,
     displayPrice: "₹2.99 / year",
-    buttonText: "Buy Now",
     features: [
       "All Plus features included",
       "Advanced ransomware defense",
@@ -40,9 +47,8 @@ export const pricingTiers = [
   {
     title: "Ultimate",
     description: "Full-scale security with AI-driven defense.",
-    price: 399, // ₹3.99 → 399 paisa
+    price: 3.99,
     displayPrice: "₹3.99 / year",
-    buttonText: "Buy Now",
     features: [
       "All Standard features included",
       "AI-driven threat prediction",
@@ -57,9 +63,23 @@ export const pricingTiers = [
 export const Pricing = () => {
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
+  // Fetch Logged-in User ID
   useEffect(() => {
-    // Load Razorpay SDK
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (data?.user) {
+        setUserId(data.user.id);
+      } else if (error) {
+        console.error("Error fetching user:", error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // Load Razorpay SDK
+  useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
@@ -67,25 +87,66 @@ export const Pricing = () => {
     document.body.appendChild(script);
   }, []);
 
+  // 🔹 Verify payment & update database
+  const verifyPayment = async (
+    razorpay_payment_id: string,
+    razorpay_order_id: string,
+    razorpay_signature: string,
+    plan: string
+  ) => {
+    try {
+      const response = await fetch("/api/verify-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_payment_id,
+          razorpay_order_id,
+          razorpay_signature,
+          plan,
+          userId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Payment verification failed");
+      }
+
+      alert(`✅ Payment for ${plan} plan verified successfully!`);
+    } catch (error) {
+      console.error("Payment verification failed", error);
+      alert("❌ Payment verification failed. Please contact support.");
+    }
+  };
+
+  // 🔹 Handle payment with Razorpay
   const handlePayment = async (amount: number, plan: string) => {
     if (!razorpayLoaded) {
       alert("Razorpay is still loading. Please wait...");
       return;
     }
 
+    if (!window.Razorpay) {
+      console.error("Razorpay SDK not loaded properly.");
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
+      // 🔹 Create Razorpay order
       const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }), // Pass amount dynamically
+        body: JSON.stringify({ amount }),
       });
 
       if (!response.ok) throw new Error("Failed to create order");
 
       const data = await response.json();
 
+      // 🔹 Razorpay options
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Razorpay Key
         amount: amount * 100, // Convert to paisa
@@ -93,10 +154,20 @@ export const Pricing = () => {
         name: "Blockchain Project",
         description: `Purchase ${plan} Plan`,
         order_id: data.id, // Razorpay Order ID
-        handler: function (response: any) {
+
+        handler: async function (response: any) {
           console.log("Payment Successful", response);
-          alert(`Payment for ${plan} plan successful!`);
+          alert(`💰 Payment for ${plan} plan successful!`);
+
+          // 🔹 Verify the payment
+          await verifyPayment(
+            response.razorpay_payment_id,
+            response.razorpay_order_id,
+            response.razorpay_signature,
+            plan
+          );
         },
+
         prefill: {
           name: "Kartik Verma",
           email: "kartikverma88272@gmail.com",
@@ -109,6 +180,7 @@ export const Pricing = () => {
       rzp1.open();
     } catch (error) {
       console.error("Payment failed", error);
+      alert("❌ Payment failed. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -158,17 +230,17 @@ export const Pricing = () => {
               </div>
 
               <Button
-                onClick={() => handlePayment(tier.price, tier.title)}
-                disabled={isProcessing || !razorpayLoaded}
+                onClick={() => userId && handlePayment(tier.price, tier.title)}
+                disabled={isProcessing || !razorpayLoaded || !userId}
                 className="w-full mb-8 bg-white text-black font-semibold py-4 rounded-lg text-lg transition-transform transform hover:scale-105 hover:bg-opacity-90 disabled:opacity-50"
               >
-                {isProcessing ? "Processing..." : tier.buttonText}
+                {isProcessing ? "Processing..." : "Buy Now"}
               </Button>
 
               <ul className="text-gray-200 text-left space-y-3">
                 {tier.features.map((feature) => (
                   <li key={feature} className="flex items-center gap-3 text-lg">
-                    ✅ {feature}
+                    {feature}
                   </li>
                 ))}
               </ul>
