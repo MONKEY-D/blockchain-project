@@ -30,7 +30,7 @@ export const Header = async () => {
               <a href="#" className="text-white/70 hover:text-white transition">
                 Activation
               </a>
-              <a href="#" className="text-white/70 hover:text-white transition">
+              <a href="/orders" className="text-white/70 hover:text-white transition">
                 Status
               </a>
               <a href="#" className="text-white/70 hover:text-white transition">

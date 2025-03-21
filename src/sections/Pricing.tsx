@@ -113,15 +113,44 @@ export const Pricing = () => {
         throw new Error(data.error || "Payment verification failed");
       }
 
-      alert(`✅ Payment for ${plan} plan verified successfully!`);
+      alert(`Payment for ${plan} plan verified successfully!`);
+      window.location.href = "/orders";
     } catch (error) {
       console.error("Payment verification failed", error);
-      alert("❌ Payment verification failed. Please contact support.");
+      alert("Payment verification failed. Please contact support.");
     }
   };
 
-  // 🔹 Handle payment with Razorpay
+  // Handle payment with Razorpay
   const handlePayment = async (amount: number, plan: string) => {
+    if (!userId) {
+      alert("You need to be logged in to purchase a plan.");
+      return;
+    }
+
+    // 🔹 Check if user is already paid
+    try {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("is_paid")
+        .eq("id", userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.is_paid) {
+        // If user has already paid, redirect to orders page
+        alert("You have already purchased a plan. Redirecting to Orders...");
+        window.location.href = "/orders";
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking payment status:", error);
+      alert("Error verifying your account. Please try again.");
+      return;
+    }
+
+    // Proceed with Razorpay payment if the user hasn't paid
     if (!razorpayLoaded) {
       alert("Razorpay is still loading. Please wait...");
       return;
@@ -135,7 +164,7 @@ export const Pricing = () => {
     setIsProcessing(true);
 
     try {
-      // 🔹 Create Razorpay order
+      // Create Razorpay order
       const response = await fetch("/api/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,7 +175,7 @@ export const Pricing = () => {
 
       const data = await response.json();
 
-      // 🔹 Razorpay options
+      // Razorpay options
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Razorpay Key
         amount: amount * 100, // Convert to paisa
@@ -157,7 +186,7 @@ export const Pricing = () => {
 
         handler: async function (response: any) {
           console.log("Payment Successful", response);
-          alert(`💰 Payment for ${plan} plan successful!`);
+          alert(`Payment for ${plan} plan successful!`);
 
           // 🔹 Verify the payment
           await verifyPayment(
@@ -180,12 +209,11 @@ export const Pricing = () => {
       rzp1.open();
     } catch (error) {
       console.error("Payment failed", error);
-      alert("❌ Payment failed. Please try again.");
+      alert("Payment failed. Please try again.");
     } finally {
       setIsProcessing(false);
     }
   };
-
   return (
     <section
       className={`relative py-20 bg-black text-white overflow-hidden ${inter.className}`}
