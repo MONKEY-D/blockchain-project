@@ -24,16 +24,13 @@ export const Header = async () => {
           </div>
           <div className="hidden md:block">
             <nav className="flex gap-8 text-sm">
-              <a href="#" className="text-white/70 hover:text-white transition">
-                Features
-              </a>
-              <a href="#" className="text-white/70 hover:text-white transition">
+              <a href="/activate" className="text-white/70 hover:text-white transition">
                 Activation
               </a>
-              <a href="/orders" className="text-white/70 hover:text-white transition">
+              <a href="/status" className="text-white/70 hover:text-white transition">
                 Status
               </a>
-              <a href="#" className="text-white/70 hover:text-white transition">
+              <a href="/about" className="text-white/70 hover:text-white transition">
                 About
               </a>
             </nav>

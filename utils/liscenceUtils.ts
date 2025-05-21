@@ -13,12 +13,12 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * Generate a random license key in XXXXX-XXXXX-XXXXX-XXXXX format.
+ * Generate a random license key in XXXX-XXXX-XXXX-XXXX format.
  * @returns {string} License Key
  */
 export function generateLicenseKey(): string {
   return [...Array(4)]
-    .map(() => crypto.randomBytes(3).toString("hex").toUpperCase()) // Generates 5-character segments
+    .map(() => crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 4))
     .join("-");
 }
 

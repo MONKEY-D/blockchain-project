@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { generateLicenseKey } from "../../../../utils/liscenceUtils"; // Fixed import typo
+import { generateLicenseKey } from "../../../../utils/liscenceUtils";
 
 // Load environment variables securely
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -57,20 +57,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate and verify HMAC SHA256 signature
-    const expectedSignature = crypto
-      .createHmac("sha256", keySecret as string) // Type assertion ensures TypeScript treats it as a string
+    // const expectedSignature = crypto
+    //   .createHmac("sha256", keySecret as string) // Type assertion ensures TypeScript treats it as a string
+    //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    //   .digest("hex");
+
+    // if (expectedSignature !== razorpay_signature) {
+    //   console.error("Payment verification failed. Signatures do not match.");
+    //   return NextResponse.json(
+    //     { error: "Payment verification failed" },
+    //     { status: 400 }
+    //   );
+    // }
+
+    const generatedSignature = crypto
+      .createHmac("sha256", keySecret)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
-      console.error("Payment verification failed. Signatures do not match.");
+    console.log(
+      "🔍 Signatures:\nExpected:",
+      generatedSignature,
+      "\nReceived:",
+      razorpay_signature
+    );
+
+    if (generatedSignature !== razorpay_signature) {
       return NextResponse.json(
-        { error: "Payment verification failed" },
+        { error: "Payment verification failed: signature mismatch" },
         { status: 400 }
       );
     }
 
-    // Check if user exists before updating
+    // Check if user exists
     const { data: existingUser, error: fetchError } = await supabase
       .from("user_profiles")
       .select("id")
@@ -78,7 +97,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (fetchError || !existingUser) {
-      console.error("User not found:", fetchError || "No matching user ID.");
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
@@ -96,48 +114,73 @@ export async function POST(request: NextRequest) {
       if (!existingKey) isUnique = true;
     }
 
-    const activationDate = new Date().toISOString();
-    const expirationDate = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes expiry
+    // Insert license key into Supabase (without activation/expiration)
+    const { error: licenseInsertError } = await supabase
+      .from("license_keys")
+      .insert([
+        {
+          user_id: userId,
+          order_id: razorpay_order_id,
+          license_key: licenseKey,
+          activation_date: null,
+          expiration_date: null,
+        },
+      ]);
 
-    // Update user profile in Supabase
-    const { error: userError } = await supabase
+    if (licenseInsertError) {
+      console.error("License key insertion failed:", licenseInsertError);
+      return NextResponse.json(
+        { error: "License key insertion failed", details: licenseInsertError },
+        { status: 500 }
+      );
+    }
+
+    // Update user profile (mark as paid)
+    const { error: userUpdateError } = await supabase
       .from("user_profiles")
       .update({ plan, is_paid: true })
       .eq("id", userId);
 
-    if (userError) {
-      console.error("User profile update failed:", userError);
+    if (userUpdateError) {
+      console.error("User profile update failed:", userUpdateError);
       return NextResponse.json(
-        { error: "User profile update failed", details: userError },
+        { error: "User profile update failed", details: userUpdateError },
         { status: 500 }
       );
     }
 
-    // Insert license key into Supabase
-    const { error: licenseError } = await supabase.from("license_keys").insert([
+    // Call blockchain API to activate the license key
+    const blockchainResponse = await fetch(
+      "http://localhost:3001/api/key-manager/create-key",
       {
-        user_id: userId,
-        order_id: razorpay_order_id,
-        license_key: licenseKey,
-        activation_date: activationDate,
-        expiration_date: expirationDate,
-      },
-    ]);
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          key: licenseKey,
+        }),
+      }
+    );
 
-    if (licenseError) {
-      console.error("License key insertion failed:", licenseError);
+    if (!blockchainResponse.ok) {
+      const errText = await blockchainResponse.text();
+      console.error("Blockchain key creation failed:", errText);
       return NextResponse.json(
-        { error: "License key insertion failed", details: licenseError },
+        { error: "Blockchain key activation failed", details: errText },
         { status: 500 }
       );
     }
 
-    console.log("✅ Payment verified & database updated successfully.");
+    const blockchainData = await blockchainResponse.json();
+    const { activation_date, expiration_date } = blockchainData.data;
+
+    console.log("✅ Payment verified, license saved, blockchain activated.");
     return NextResponse.json({
       success: true,
       license_key: licenseKey,
-      activation_date: activationDate,
-      expiration_date: expirationDate,
+      activation_date,
+      expiration_date,
     });
   } catch (error) {
     console.error("Internal server error:", error);

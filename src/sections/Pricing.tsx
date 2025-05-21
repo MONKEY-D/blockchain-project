@@ -141,7 +141,7 @@ export const Pricing = () => {
       if (data?.is_paid) {
         // If user has already paid, redirect to orders page
         alert("You have already purchased a plan. Redirecting to Orders...");
-        window.location.href = "/orders";
+        window.location.href = "/status";
         return;
       }
     } catch (error) {
