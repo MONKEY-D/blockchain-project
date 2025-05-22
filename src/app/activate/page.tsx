@@ -6,12 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "../../../utils/supabase/client"; // match status page logic
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = createClient();
 
 export default function ActivatePage() {
   const [activationKey, setActivationKey] = useState("");
@@ -20,6 +17,10 @@ export default function ActivatePage() {
   >("initial");
   const [activationDate, setActivationDate] = useState<Date | null>(null);
   const [expirationDate, setExpirationDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    fetchLicenseStatus(); // fetch persisted data on page load
+  }, []);
 
   useEffect(() => {
     if (status === "active" && expirationDate) {
@@ -34,28 +35,49 @@ export default function ActivatePage() {
     }
   }, [status, expirationDate]);
 
-  const handleActivate = async () => {
-    console.log("🔧 handleActivate triggered");
+  const fetchLicenseStatus = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) return;
 
+    const { data: licenseData } = await supabase
+      .from("license_keys")
+      .select("*")
+      .eq("user_id", authData.user.id)
+      .order("activation_date", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (licenseData?.activation_date && licenseData?.expiration_date) {
+      const activationDateObj = new Date(licenseData.activation_date);
+      const expirationDateObj = new Date(licenseData.expiration_date);
+      setActivationDate(activationDateObj);
+      setExpirationDate(expirationDateObj);
+      setActivationKey(licenseData.license_key || "");
+
+      const now = new Date();
+      if (now > expirationDateObj) {
+        setStatus("expired");
+      } else {
+        setStatus("active");
+      }
+    }
+  };
+
+  const handleActivate = async () => {
     try {
-      // Step 1: Get current user
-      console.log("🔍 Getting current user from Supabase...");
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        console.error("❌ User not authenticated:", userError);
+        console.error("User not authenticated:", userError);
         setStatus("error");
         return;
       }
 
       const userId = user.id;
-      console.log("✅ User authenticated:", userId);
 
-      // Step 2: Check if the license key belongs to the user
-      console.log("🔍 Validating license key against user...");
       const { data: licenseRecord, error: licenseError } = await supabase
         .from("license_keys")
         .select("*")
@@ -64,15 +86,11 @@ export default function ActivatePage() {
         .maybeSingle();
 
       if (licenseError || !licenseRecord) {
-        console.error("❌ License validation failed:", licenseError);
+        console.error("License validation failed:", licenseError);
         setStatus("error");
         return;
       }
 
-      console.log("✅ License key valid:", licenseRecord);
-
-      // Step 3: Call backend API to activate the key
-      console.log("🚀 Sending request to backend activation endpoint...");
       const response = await fetch(
         "http://localhost:3001/api/key-manager/activate-key",
         {
@@ -82,12 +100,8 @@ export default function ActivatePage() {
         }
       );
 
-      console.log("📡 Response received from backend:", response.status);
-
       if (response.ok) {
         const json = await response.json();
-        console.log("✅ Activation response data:", json);
-
         const { activation_date, expiration_date } = json.data;
 
         const activationDateObj = new Date(activation_date * 1000);
@@ -104,8 +118,7 @@ export default function ActivatePage() {
         setExpirationDate(expirationDateObj);
         setStatus("active");
 
-        // Step 4: Save activation details to Supabase
-        console.log("💾 Updating license record in Supabase...");
+        // Persist to Supabase
         const { error: updateError } = await supabase
           .from("license_keys")
           .update({
@@ -115,17 +128,15 @@ export default function ActivatePage() {
           .eq("license_key", activationKey);
 
         if (updateError) {
-          console.error("⚠️ Failed to update activation info:", updateError);
-        } else {
-          console.log("✅ Activation info updated successfully in Supabase");
+          console.error("Failed to update activation info:", updateError);
         }
       } else {
         const err = await response.json();
-        console.error("❌ Activation API error response:", err);
+        console.error("Activation API error:", err);
         setStatus("error");
       }
     } catch (error) {
-      console.error("🔥 Unexpected activation error:", error);
+      console.error("Unexpected error:", error);
       setStatus("error");
     }
   };
