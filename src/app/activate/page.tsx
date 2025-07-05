@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
-import { createClient } from "../../../utils/supabase/client"; // match status page logic
+import { createClient } from "../../../utils/supabase/client";
 
 const supabase = createClient();
 
@@ -17,9 +17,10 @@ export default function ActivatePage() {
   >("initial");
   const [activationDate, setActivationDate] = useState<Date | null>(null);
   const [expirationDate, setExpirationDate] = useState<Date | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
 
   useEffect(() => {
-    fetchLicenseStatus(); // fetch persisted data on page load
+    fetchLicenseStatus();
   }, []);
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function ActivatePage() {
   };
 
   const handleActivate = async () => {
+    setIsActivating(true);
     try {
       const {
         data: { user },
@@ -92,7 +94,7 @@ export default function ActivatePage() {
       }
 
       const response = await fetch(
-        "http://localhost:3001/api/key-manager/activate-key",
+        "https://blockchain-licenser-backend.onrender.com/api/key-manager/activate-key",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -118,7 +120,6 @@ export default function ActivatePage() {
         setExpirationDate(expirationDateObj);
         setStatus("active");
 
-        // Persist to Supabase
         const { error: updateError } = await supabase
           .from("license_keys")
           .update({
@@ -138,26 +139,28 @@ export default function ActivatePage() {
     } catch (error) {
       console.error("Unexpected error:", error);
       setStatus("error");
+    } finally {
+      setIsActivating(false);
     }
   };
 
   const renderStatusMessage = () => {
     switch (status) {
       case "initial":
-        return "🛡️ Activate your license first";
+        return "Activate your license first";
       case "active":
-        return "✅ License Active";
+        return "License Active";
       case "expired":
-        return "❌ License Expired";
+        return "License Expired";
       case "error":
-        return "⚠️ Activation failed. Try again.";
+        return "Activation failed. Try again.";
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-indigo-900 to-black text-white px-6 py-12 font-mono">
-      <StarsBackground className="absolute inset-0 opacity-40" />
-      <ShootingStars className="absolute inset-0" />
+      <StarsBackground className="absolute inset-0 opacity-70" />
+      <ShootingStars />
       <h1 className="text-4xl font-bold text-center mb-10 text-purple-400">
         Activate Your Antivirus License
       </h1>
@@ -178,15 +181,44 @@ export default function ActivatePage() {
             />
             <Button
               onClick={handleActivate}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-              disabled={status === "active" || status === "expired"}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center"
+              disabled={
+                status === "active" || status === "expired" || isActivating
+              }
             >
-              Activate
+              {isActivating ? (
+                <>
+                  <svg
+                    className="animate-spin h-5 w-5 mr-2 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    ></path>
+                  </svg>
+                  Activating...
+                </>
+              ) : (
+                "Activate"
+              )}
             </Button>
+
             {activationDate && expirationDate && (
               <div className="text-sm mt-4 text-center">
-                <p>🕓 Activated: {activationDate.toLocaleString()}</p>
-                <p>⏳ Expires: {expirationDate.toLocaleString()}</p>
+                <p>Activated: {activationDate.toLocaleString()}</p>
+                <p>Expires: {expirationDate.toLocaleString()}</p>
               </div>
             )}
           </CardContent>

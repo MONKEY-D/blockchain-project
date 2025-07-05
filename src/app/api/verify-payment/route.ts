@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     // Call blockchain API to activate the license key
     const blockchainResponse = await fetch(
-      "http://localhost:3001/api/key-manager/create-key",
+      "https://blockchain-licenser-backend.onrender.com/api/key-manager/create-key",
       {
         method: "POST",
         headers: {
