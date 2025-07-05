@@ -7,6 +7,7 @@ import { StarsBackground } from "@/components/ui/stars-background";
 import { Inter } from "next/font/google";
 import { createClient } from "../../utils/supabase/client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const supabase = createClient();
 const inter = Inter({ subsets: ["latin"], weight: ["400", "600", "700"] });
@@ -67,6 +68,8 @@ export const Pricing = () => {
   const [verifyingPlan, setVerifyingPlan] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
+  const router = useRouter();
+
   useEffect(() => {
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
@@ -118,7 +121,8 @@ export const Pricing = () => {
       }
 
       alert(`Payment for ${plan} plan verified successfully!`);
-      window.location.href = "/status";
+      // window.location.href = "/status";
+      router.push("/status");
     } catch (error) {
       console.error("Payment verification failed", error);
       setIsVerifying(false);
@@ -143,7 +147,7 @@ export const Pricing = () => {
 
       if (data?.is_paid) {
         alert("You have already purchased a plan. Redirecting to Orders...");
-        window.location.href = "/status";
+        router.push("/status");
         return;
       }
     } catch (error) {
@@ -186,12 +190,20 @@ export const Pricing = () => {
         handler: async function (response: any) {
           alert(`Payment for ${plan} plan successful!`);
 
-          await verifyPayment(
-            response.razorpay_payment_id,
-            response.razorpay_order_id,
-            response.razorpay_signature,
-            plan
-          );
+          setTimeout(() => {
+            verifyPayment(
+              response.razorpay_payment_id,
+              response.razorpay_order_id,
+              response.razorpay_signature,
+              plan
+            );
+          }, 500);
+        },
+
+        modal: {
+          ondismiss: function () {
+            console.warn("🟥 Razorpay payment popup closed by user."); // ✅ [6] Debug log
+          },
         },
 
         prefill: {
